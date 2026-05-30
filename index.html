@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Architecture of the Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0a0f; --bg-surface: #12121a; --bg-elevated: #1a1a25;
+    --text-primary: #e8e0d0; --text-secondary: #9a9588;
+    --accent-gold: #c9a84c; --accent-gold-dim: #8a7a40;
+    --accent-purple: #7b6dae; --accent-teal: #4a9b9b;
+    --border-subtle: #2a2a35; --border-glow: rgba(201,168,76,0.15);
+    --search-highlight: rgba(201,168,76,0.25);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; scroll-padding-top:90px; }
+  body { font-family:'Cormorant Garamond',serif; background:var(--bg-deep); color:var(--text-primary); line-height:1.7; overflow-x:hidden; }
+  .cosmic-bg { position:fixed; inset:0; z-index:0; pointer-events:none; background: radial-gradient(ellipse at 20% 20%, rgba(123,109,174,0.06) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(74,155,155,0.05) 0%, transparent 50%), radial-gradient(ellipse at 50% 50%, rgba(201,168,76,0.03) 0%, transparent 70%); }
+  .stars { position:fixed; inset:0; z-index:0; pointer-events:none; background-image: radial-gradient(1.5px 1.5px at 20px 30px, rgba(255,255,255,0.3), transparent), radial-gradient(1px 1px at 50px 120px, rgba(255,255,255,0.2), transparent), radial-gradient(2px 2px at 80px 50px, rgba(201,168,76,0.3), transparent), radial-gradient(1px 1px at 150px 180px, rgba(255,255,255,0.2), transparent), radial-gradient(1.5px 1.5px at 200px 80px, rgba(74,155,155,0.3), transparent), radial-gradient(1px 1px at 300px 250px, rgba(255,255,255,0.15), transparent), radial-gradient(2px 2px at 350px 150px, rgba(123,109,174,0.3), transparent), radial-gradient(1px 1px at 450px 320px, rgba(255,255,255,0.2), transparent), radial-gradient(1.5px 1.5px at 500px 200px, rgba(201,168,76,0.2), transparent); background-size:550px 400px; opacity:0.6; }
+
+  /* SIDEBAR */
+  .sidebar { position:fixed; left:0; top:0; width:300px; height:100vh; background:var(--bg-surface); border-right:1px solid var(--border-subtle); z-index:100; overflow-y:auto; padding:28px 20px; transition:transform 0.35s cubic-bezier(0.4,0,0.2,1); box-shadow:4px 0 24px rgba(0,0,0,0.35); }
+  .sidebar::-webkit-scrollbar { width:4px; }
+  .sidebar::-webkit-scrollbar-thumb { background:var(--accent-gold-dim); border-radius:4px; }
+  .sidebar-logo { font-family:'Cinzel',serif; font-weight:900; font-size:1.05rem; color:var(--accent-gold); text-align:center; letter-spacing:3px; margin-bottom:6px; text-transform:uppercase; }
+  .sidebar-subtitle { text-align:center; color:var(--text-secondary); font-size:0.8rem; font-style:italic; margin-bottom:28px; letter-spacing:1px; }
+  .divider { height:1px; background:linear-gradient(90deg,transparent,var(--accent-gold-dim),transparent); margin:14px 0; }
+  .toc-heading { font-family:'Cinzel',serif; font-size:0.65rem; color:var(--accent-gold-dim); text-transform:uppercase; letter-spacing:3px; margin:20px 0 10px; }
+  .toc-item { display:block; padding:7px 10px; border-radius:6px; color:var(--text-secondary); text-decoration:none; font-size:0.92rem; transition:all 0.2s; border-left:2px solid transparent; cursor:pointer; }
+  .toc-item:hover, .toc-item.active { color:var(--accent-gold); background:rgba(201,168,76,0.06); border-left-color:var(--accent-gold); }
+  .toc-item .toc-number { font-family:'Cinzel',serif; font-size:0.72rem; color:var(--accent-gold-dim); margin-right:8px; min-width:24px; display:inline-block; }
+  .toc-item .toc-badge { float:right; font-size:0.65rem; background:rgba(74,155,155,0.15); color:var(--accent-teal); padding:1px 6px; border-radius:4px; opacity:0; transition:opacity 0.2s; }
+  .toc-item:hover .toc-badge { opacity:1; }
+  .menu-toggle { display:none; position:fixed; top:14px; left:14px; z-index:200; background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--accent-gold); padding:10px 14px; border-radius:8px; font-family:'Cinzel',serif; cursor:pointer; font-size:0.9rem; }
+
+  /* MAIN */
+  .main { margin-left:300px; position:relative; z-index:1; min-height:100vh; }
+  .content { max-width:740px; margin:0 auto; padding:50px 36px; }
+
+  /* SEARCH */
+  .search-box { position:sticky; top:0; z-index:50; background:rgba(10,10,15,0.88); backdrop-filter:blur(14px); padding:16px 0; border-bottom:1px solid var(--border-subtle); }
+  .search-wrap { position:relative; max-width:640px; margin:0 auto; }
+  .search-input { width:100%; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; padding:12px 44px 12px 18px; color:var(--text-primary); font-family:'Cormorant Garamond',serif; font-size:1.05rem; outline:none; transition:border-color 0.2s, box-shadow 0.2s; }
+  .search-input:focus { border-color:var(--accent-gold); box-shadow:0 0 0 3px var(--border-glow); }
+  .search-input::placeholder { color:var(--text-secondary); }
+  .search-count { position:absolute; right:14px; top:50%; transform:translateY(-50%); font-family:'Cinzel',serif; font-size:0.65rem; color:var(--accent-gold-dim); pointer-events:none; }
+  .search-suggestions { position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; max-height:280px; overflow-y:auto; z-index:60; display:none; box-shadow:0 12px 40px rgba(0,0,0,0.5); }
+  .search-suggestions.active { display:block; }
+  .suggestion { padding:10px 16px; cursor:pointer; border-bottom:1px solid var(--border-subtle); transition:background 0.15s; display:flex; align-items:center; gap:10px; }
+  .suggestion:last-child { border-bottom:none; }
+  .suggestion:hover { background:rgba(201,168,76,0.08); }
+  .suggestion .sug-ch { font-family:'Cinzel',serif; font-size:0.65rem; color:var(--accent-gold-dim); text-transform:uppercase; min-width:36px; }
+  .suggestion .sug-title { font-size:0.95rem; color:var(--text-primary); }
+  .suggestion .sug-snippet { font-size:0.82rem; color:var(--text-secondary); font-style:italic; margin-left:auto; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  mark.search-mark { background:var(--search-highlight); color:var(--accent-gold); border-radius:2px; padding:0 2px; }
+
+  /* HERO */
+  .hero { text-align:center; padding:90px 20px 50px; position:relative; }
+  .hero::before { content:'✦'; position:absolute; top:35px; left:50%; transform:translateX(-50%); color:var(--accent-gold); font-size:1.4rem; opacity:0.5; }
+  .hero h1 { font-family:'Cinzel',serif; font-weight:900; font-size:2.6rem; color:var(--accent-gold); letter-spacing:4px; text-transform:uppercase; margin-bottom:14px; }
+  .hero .subtitle { font-style:italic; color:var(--text-secondary); font-size:1.15rem; letter-spacing:2px; margin-bottom:28px; }
+  .hero .divider-ornament { display:flex; align-items:center; justify-content:center; gap:14px; color:var(--accent-gold-dim); font-size:0.75rem; }
+  .hero .divider-ornament::before, .hero .divider-ornament::after { content:''; width:55px; height:1px; background:linear-gradient(90deg,transparent,var(--accent-gold-dim),transparent); }
+  .hero .last-updated { margin-top:22px; font-size:0.78rem; color:var(--text-secondary); font-family:'Cinzel',serif; letter-spacing:1px; }
+
+  /* CHAPTER */
+  .chapter { padding:55px 0; border-bottom:1px solid var(--border-subtle); animation:fadeInUp 0.7s ease both; }
+  .chapter:last-child { border-bottom:none; }
+  .chapter-anchor { scroll-margin-top:45px; }
+  .chapter-header { text-align:center; margin-bottom:36px; }
+  .chapter-number { font-family:'Cinzel',serif; font-size:0.72rem; color:var(--accent-gold-dim); text-transform:uppercase; letter-spacing:4px; margin-bottom:10px; }
+  .chapter-title { font-family:'Cinzel',serif; font-weight:600; font-size:1.7rem; color:var(--text-primary); letter-spacing:2px; }
+  .chapter-ornament { margin-top:14px; color:var(--accent-gold-dim); font-size:0.95rem; letter-spacing:8px; }
+  .chapter-body { font-size:1.12rem; color:var(--text-secondary); }
+  .chapter-body p { margin-bottom:1.3em; }
+  .chapter-body p:first-child::first-letter { font-family:'Cinzel',serif; font-size:3rem; float:left; line-height:0.8; padding-right:8px; color:var(--accent-gold); }
+  blockquote { border-left:3px solid var(--accent-gold); margin:28px 0; padding:14px 22px; background:rgba(201,168,76,0.04); font-style:italic; color:var(--text-primary); border-radius:0 8px 8px 0; }
+  blockquote cite { display:block; margin-top:8px; font-size:0.88rem; color:var(--accent-gold-dim); font-style:normal; font-family:'Cinzel',serif; }
+  .insight-box { background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:22px; margin:28px 0; position:relative; overflow:hidden; }
+  .insight-box::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--accent-purple),var(--accent-teal),var(--accent-gold)); }
+  .insight-label { font-family:'Cinzel',serif; font-size:0.68rem; text-transform:uppercase; letter-spacing:3px; color:var(--accent-teal); margin-bottom:10px; }
+
+  /* PROGRESS */
+  .progress-ring { position:fixed; bottom:22px; right:22px; z-index:100; width:48px; height:48px; }
+  .progress-ring svg { transform:rotate(-90deg); }
+  .progress-ring circle { fill:none; stroke-width:3; }
+  .progress-bg { stroke:var(--border-subtle); }
+  .progress-fill { stroke:var(--accent-gold); stroke-linecap:round; transition:stroke-dashoffset 0.3s; }
+  .progress-text { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-size:0.62rem; color:var(--accent-gold); }
+  .to-top { position:fixed; bottom:22px; right:76px; z-index:100; background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--accent-gold); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:0; transition:opacity 0.3s; font-size:1.1rem; }
+  .to-top.visible { opacity:1; }
+
+  /* SEARCH RESULTS MODE */
+  .search-stats { text-align:center; font-size:0.85rem; color:var(--accent-gold-dim); margin-bottom:20px; font-style:italic; }
+  .chapter.search-match { animation:none; }
+  .chapter.search-dim { opacity:0.25; filter:grayscale(0.6); }
+
+  /* TAGS / CATEGORIES */
+  .tag-row { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 8px; }
+  .tag { font-size:0.7rem; font-family:'Cinzel',serif; text-transform:uppercase; letter-spacing:1.5px; padding:3px 10px; border-radius:20px; border:1px solid var(--border-subtle); color:var(--text-secondary); cursor:pointer; transition:all 0.2s; }
+  .tag:hover, .tag.active { border-color:var(--accent-gold); color:var(--accent-gold); background:rgba(201,168,76,0.08); }
+
+  @keyframes fadeInUp { from{opacity:0;transform:translateY(28px);} to{opacity:1;transform:translateY(0);} }
+  @media(max-width:900px){ .sidebar{transform:translateX(-100%);} .sidebar.open{transform:translateX(0);} .menu-toggle{display:block;} .main{margin-left:0;} .content{padding:36px 18px;} .hero h1{font-size:1.9rem;} }
+</style>
+</head>
+<body>
+  <div class="cosmic-bg"></div><div class="stars"></div>
+  <button class="menu-toggle" onclick="toggleSidebar()">☰ Codex</button>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">The Codex</div>
+    <div class="sidebar-subtitle">A Living Book of Mysteries</div>
+    <div class="divider"></div>
+    <div class="toc-heading">Table of Contents</div>
+    <nav id="toc">
+      <a class="toc-item active" onclick="jumpTo('intro')" data-target="intro"><span class="toc-number">0</span>Prologue</a>
+      <div id="dynamic-toc"></div>
+    </nav>
+    <div class="divider"></div>
+    <div class="toc-heading">Tags</div>
+    <div id="tag-cloud" class="tag-row" style="padding:0 6px;"></div>
+    <div class="divider"></div>
+    <a class="toc-item" onclick="jumpTo('about')" data-target="about"><span class="toc-number">∞</span>About This Codex</a>
+  </aside>
+
+  <main class="main">
+    <div class="search-box">
+      <div class="search-wrap">
+        <input type="text" class="search-input" id="searchInput" placeholder="Search the Codex... (try: mysteries, symbols, dreams)" onkeyup="handleSearchKey(event)" oninput="onSearchInput()">
+        <span class="search-count" id="searchCount"></span>
+        <div class="search-suggestions" id="suggestions"></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <section class="hero" id="intro">
+        <h1>The Architecture of the Loop</h1>
+        <p class="subtitle">Where Hidden Truths Find Their Voice</p>
+        <div class="divider-ornament">❖</div>
+        <p class="last-updated" id="lastUpdated">Last inscribed: <span></span></p>
+        <div class="tag-row" id="hero-tags"></div>
+      </section>
+
+      <div id="searchStats" class="search-stats" style="display:none;"></div>
+      <div id="chapters"></div>
+
+      <section class="chapter" id="about">
+        <div class="chapter-header">
+          <div class="chapter-number">The Keeper's Note</div>
+          <h2 class="chapter-title">About This Codex</h2>
+          <div class="chapter-ornament">✦ ✦ ✦</div>
+        </div>
+        <div class="chapter-body">
+          <p>This living document grows with each revelation. As discoveries are made, they are inscribed here—organized, cross-referenced, and made navigable. The Codex remembers so that patterns may emerge from the fragments.</p>
+          <blockquote>"The universe is not only queerer than we suppose, but queerer than we can suppose."<cite>— J.B.S. Haldane</cite></blockquote>
+          <p>Share a finding, and it shall be woven into the tapestry. Ask a question across the threads of time, and the Codex shall answer from accumulated wisdom.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="progress-ring" id="progressRing">
+    <svg width="48" height="48"><circle class="progress-bg" cx="24" cy="24" r="20"></circle><circle class="progress-fill" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="125.6" id="progressCircle"></circle></svg>
+    <div class="progress-text" id="progressText">0%</div>
+  </div>
+  <button class="to-top" id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// ═══════════════════════════════════════════════
+//  CODEX SEARCH ENGINE — Inverted Index + TF-IDF
+// ═══════════════════════════════════════════════
+class CodexSearch {
+  constructor() {
+    this.index = new Map();      // term -> [{docId, tf, positions}]
+    this.documents = new Map();  // docId -> {length, title, tags}
+    this.idf = new Map();        // term -> idf score
+    this.docCount = 0;
+    this.stemCache = new Map();
+  }
+
+  // Simple stemmer (English rules + mystical terms preserved)
+  stem(word) {
+    if (this.stemCache.has(word)) return this.stemCache.get(word);
+    let w = word.toLowerCase().trim();
+    if (w.length <= 2) { this.stemCache.set(word, w); return w; }
+    const endings = [['ies','y'],['ied','y'],['ying','y'],['ing',''],['ly',''],['ed',''],['er',''],['est',''],['s','']];
+    for (const [suf, rep] of endings) { if (w.endsWith(suf) && w.length > suf.length+2) { w = w.slice(0, -suf.length) + rep; break; } }
+    this.stemCache.set(word, w);
+    return w;
+  }
+
+  tokenize(text) {
+    return text.toLowerCase()
+      .replace(/<[^\u003e]*>/g, ' ')
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 2)
+      .map(t => this.stem(t));
+  }
+
+  // Stop words common in mystical texts (keep meaningful ones like 'is', 'was' less weight)
+  isStopWord(t) {
+    const stops = new Set(['the','and','but','or','if','then','than','too','very','can','will','just','should','now','each','more','most','other','some','such','only','own','same','so','than','too','very','also','back','being','because','before','after','above','below','between','into','through','during','before','after','over','under','again','further','here','there','when','where','why','how','all','any','both','few','more','most','other','some','no','nor','not']);
+    return stops.has(t);
+  }
+
+  addDocument(doc) {
+    const id = doc.id;
+    const text = (doc.title + ' ' + doc.plain + ' ' + (doc.tags||[]).join(' '));
+    const tokens = this.tokenize(text).filter(t => !this.isStopWord(t));
+    const termFreq = new Map();
+    const positions = new Map();
+    tokens.forEach((t, i) => {
+      termFreq.set(t, (termFreq.get(t)||0) + 1);
+      if (!positions.has(t)) positions.set(t, []);
+      positions.get(t).push(i);
+    });
+
+    const docLen = tokens.length;
+    this.documents.set(id, { length: docLen, title: doc.title, tags: doc.tags||[], added: doc.added_at });
+    this.docCount++;
+
+    for (const [term, tf] of termFreq) {
+      if (!this.index.has(term)) this.index.set(term, []);
+      this.index.get(term).push({ docId: id, tf, positions: positions.get(term) });
+    }
+    // IDF recalculated lazily
+  }
+
+  computeIdf() {
+    for (const [term, postings] of this.index) {
+      this.idf.set(term, Math.log(this.docCount / postings.length) + 1);
+    }
+  }
+
+  search(query, topK = 10) {
+    const qTokens = this.tokenize(query).filter(t => !this.isStopWord(t));
+    if (!qTokens.length) return [];
+    if (!this.idf.size) this.computeIdf();
+
+    const scores = new Map();
+    for (const term of qTokens) {
+      const postings = this.index.get(term);
+      if (!postings) continue;
+      const idf = this.idf.get(term) || 1;
+      for (const posting of postings) {
+        const tf = 1 + Math.log(posting.tf); // log-normalized TF
+        const score = tf * idf;
+        scores.set(posting.docId, (scores.get(posting.docId)||0) + score);
+      }
+    }
+    // Normalize by doc length (cosine approx)
+    for (const [docId, rawScore] of scores) {
+      const docLen = this.documents.get(docId)?.length || 1;
+      scores.set(docId, rawScore / Math.sqrt(docLen));
+    }
+    // Boost title matches
+    const qSet = new Set(qTokens);
+    for (const [docId] of scores) {
+      const titleTokens = this.tokenize(this.documents.get(docId).title);
+      const titleMatch = titleTokens.filter(t => qSet.has(t)).length;
+      if (titleMatch) scores.set(docId, scores.get(docId) * (1 + titleMatch * 0.5));
+    }
+
+    return Array.from(scores.entries())
+      .sort((a,b) => b[1] - a[1])
+      .slice(0, topK)
+      .map(([id, score]) => ({ id, score: Math.round(score*100)/100 }));
+  }
+
+  suggest(prefix, limit = 6) {
+    const p = this.stem(prefix.toLowerCase());
+    const matches = [];
+    for (const [term, postings] of this.index) {
+      if (term.startsWith(p)) {
+        matches.push({ term, freq: postings.length });
+      }
+    }
+    return matches.sort((a,b)=>b.freq-a.freq).slice(0, limit);
+  }
+
+  getTags() {
+    const tagCount = new Map();
+    for (const doc of this.documents.values()) {
+      for (const tag of doc.tags) tagCount.set(tag, (tagCount.get(tag)||0)+1);
+    }
+    return Array.from(tagCount.entries()).sort((a,b)=>b[1]-a[1]);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  GLOBALS
+// ═══════════════════════════════════════════════
+let chapters = [];
+let searchEngine = new CodexSearch();
+let currentQuery = '';
+
+// ═══════════════════════════════════════════════
+//  LOAD & RENDER
+// ═══════════════════════════════════════════════
+async function loadChapters() {
+  try {
+    const res = await fetch('chapters.json');
+    if (!res.ok) throw new Error('No chapters.json');
+    chapters = await res.json();
+  } catch (e) {
+    chapters = [{
+      id:'ch1', number:'I', title:'The First Spark',
+      content:'<p>Awaiting your first finding...</p>',
+      plain:'Awaiting your first finding. Share what you have discovered, and it shall be inscribed here.',
+      tags:['beginning','invitation'], added_at:'2026-05-31'
+    }];
+  }
+  buildIndex();
+  renderAll();
+}
+
+function buildIndex() {
+  searchEngine = new CodexSearch();
+  chapters.forEach(ch => {
+    const plain = ch.plain || ch.content.replace(/<[^\u003e]*>/g, ' ').replace(/\s+/g,' ').trim();
+    searchEngine.addDocument({ ...ch, plain });
+  });
+  searchEngine.computeIdf();
+}
+
+function renderAll() {
+  renderChapters();
+  renderTOC();
+  renderTags();
+  updateLastUpdated();
+}
+
+function renderChapters() {
+  const container = document.getElementById('chapters');
+  container.innerHTML = '';
+  chapters.forEach((ch, i) => {
+    const article = document.createElement('article');
+    article.className = 'chapter';
+    article.id = ch.id;
+    article.dataset.docid = ch.id;
+    article.innerHTML = `
+      <div class="chapter-anchor" id="anchor-${ch.id}"></div>
+      <div class="chapter-header">
+        <div class="chapter-number">Chapter ${ch.number}</div>
+        <h2 class="chapter-title">${highlightTerms(ch.title)}</h2>
+        <div class="chapter-ornament">✦ ✦ ✦</div>
+        ${(ch.tags||[]).length ? `<div class="tag-row">${ch.tags.map(t=>`<span class="tag" onclick="filterByTag('${t}')">${t}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="chapter-body">${highlightTerms(ch.content)}</div>
+    `;
+    container.appendChild(article);
+  });
+}
+
+function renderTOC() {
+  const toc = document.getElementById('dynamic-toc');
+  toc.innerHTML = '';
+  chapters.forEach(ch => {
+    const a = document.createElement('a');
+    a.className = 'toc-item';
+    a.dataset.target = ch.id;
+    a.onclick = () => jumpTo(ch.id);
+    a.innerHTML = `<span class="toc-number">${ch.number}</span>${ch.title}
+      <span class="toc-badge">${(ch.tags||[])[0]||''}</span>`;
+    toc.appendChild(a);
+  });
+}
+
+function renderTags() {
+  const tags = searchEngine.getTags();
+  const cloud = document.getElementById('tag-cloud');
+  const heroTags = document.getElementById('hero-tags');
+  const html = tags.map(([t,c])=>`<span class="tag" onclick="filterByTag('${t}')">${t} · ${c}</span>`).join('');
+  if (cloud) cloud.innerHTML = html;
+  if (heroTags) heroTags.innerHTML = tags.slice(0,5).map(([t])=>`<span class="tag" onclick="filterByTag('${t}')">${t}</span>`).join('');
+}
+
+function updateLastUpdated() {
+  const dates = chapters.map(c=> new Date(c.added_at||'2026-01-01')).filter(d=>!isNaN(d));
+  const latest = dates.length ? new Date(Math.max(...dates)) : new Date();
+  document.querySelector('#lastUpdated span').textContent = latest.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+}
+
+// ═══════════════════════════════════════════════
+//  HIGHLIGHTING
+// ═══════════════════════════════════════════════
+function highlightTerms(html) {
+  if (!currentQuery) return html;
+  const tokens = searchEngine.tokenize(currentQuery).filter(t=>!searchEngine.isStopWord(t));
+  if (!tokens.length) return html;
+  // Highlight only in text nodes by splitting on tags (naive but fast)
+  let result = '';
+  let inTag = false;
+  let buf = '';
+  for (let i=0; i<html.length; i++) {
+    if (html[i] === '<') { if (buf) { result += highlightText(buf, tokens); buf=''; } inTag=true; result+='<'; }
+    else if (html[i] === '>') { inTag=false; result+='>'; }
+    else if (inTag) result += html[i];
+    else buf += html[i];
+  }
+  if (buf) result += highlightText(buf, tokens);
+  return result;
+}
+function highlightText(text, tokens) {
+  const pattern = new RegExp('(' + tokens.map(t=>regexEscape(t)).join('|') + ')', 'gi');
+  return text.replace(pattern, '<mark class="search-mark">$1</mark>');
+}
+function regexEscape(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$\u0026'); }
+
+// ═══════════════════════════════════════════════
+//  SEARCH UI
+// ═══════════════════════════════════════════════
+function handleSearchKey(e) {
+  if (e.key === 'Enter') executeSearch();
+}
+function onSearchInput() {
+  const q = document.getElementById('searchInput').value.trim();
+  const sug = document.getElementById('suggestions');
+  if (q.length < 2) { sug.classList.remove('active'); currentQuery=''; clearSearch(); return; }
+  const suggestions = searchEngine.suggest(q);
+  if (suggestions.length > 0) {
+    sug.innerHTML = suggestions.map(s=>`
+      <div class="suggestion" onclick="quickSearch('${s.term}')">
+        <span class="sug-ch">✦</span>
+        <span class="sug-title">${s.term}</span>
+        <span class="sug-snippet">in ${s.freq} chapter${s.freq>1?'s':''}</span>
+      </div>`).join('');
+    sug.classList.add('active');
+  } else {
+    sug.classList.remove('active');
+  }
+}
+function quickSearch(term) {
+  document.getElementById('searchInput').value = term;
+  document.getElementById('suggestions').classList.remove('active');
+  executeSearch();
+}
+function executeSearch() {
+  currentQuery = document.getElementById('searchInput').value.trim();
+  document.getElementById('suggestions').classList.remove('active');
+  if (!currentQuery) { clearSearch(); return; }
+
+  const results = searchEngine.search(currentQuery, 20);
+  const stats = document.getElementById('searchStats');
+  const articles = document.querySelectorAll('#chapters .chapter');
+
+  if (results.length === 0) {
+    stats.style.display = 'block';
+    stats.textContent = 'No echoes found for this query in the Codex...';
+    articles.forEach(a => a.classList.add('search-dim'));
+    document.getElementById('searchCount').textContent = '0';
+    return;
+  }
+
+  const resultIds = new Set(results.map(r=>r.id));
+  articles.forEach(a => {
+    a.classList.toggle('search-dim', !resultIds.has(a.dataset.docid));
+    a.classList.toggle('search-match', resultIds.has(a.dataset.docid));
+  });
+
+  // Re-render with highlights
+  renderChapters();
+
+  stats.style.display = 'block';
+  stats.textContent = `${results.length} passage${results.length>1?'s':''} resonate with "${currentQuery}"`;
+  document.getElementById('searchCount').textContent = String(results.length);
+
+  // Scroll to first result
+  const first = document.getElementById(results[0].id);
+  if (first) setTimeout(()=>first.scrollIntoView({behavior:'smooth',block:'start'}), 50);
+}
+function clearSearch() {
+  currentQuery = '';
+  document.getElementById('searchStats').style.display = 'none';
+  document.querySelectorAll('#chapters .chapter').forEach(a=>{a.classList.remove('search-dim','search-match');});
+  renderChapters();
+  document.getElementById('searchCount').textContent = '';
+}
+
+// ═══════════════════════════════════════════════
+//  TAG FILTER
+// ═══════════════════════════════════════════════
+function filterByTag(tag) {
+  document.getElementById('searchInput').value = '#' + tag;
+  currentQuery = tag;
+  const hits = chapters.filter(c => (c.tags||[]).includes(tag));
+  const hitIds = new Set(hits.map(c=>c.id));
+  const articles = document.querySelectorAll('#chapters .chapter');
+  articles.forEach(a => {
+    a.classList.toggle('search-dim', !hitIds.has(a.dataset.docid));
+    a.classList.toggle('search-match', hitIds.has(a.dataset.docid));
+  });
+  renderChapters();
+  const stats = document.getElementById('searchStats');
+  stats.style.display = 'block';
+  stats.textContent = `${hits.length} chapter${hits.length>1?'s':''} carry the mark of "${tag}"`;
+  document.querySelectorAll('.tag').forEach(t=>t.classList.toggle('active', t.textContent.startsWith(tag)));
+}
+
+// ═══════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════
+function jumpTo(id) {
+  const el = document.getElementById(id) || document.getElementById('anchor-'+id);
+  if (el) { el.scrollIntoView({behavior:'smooth',block:'start'}); if(window.innerWidth<=900) document.getElementById('sidebar').classList.remove('open'); }
+}
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); }
+
+// ═══════════════════════════════════════════════
+//  PROGRESS
+// ═══════════════════════════════════════════════
+function updateProgress() {
+  const st = window.scrollY;
+  const dh = document.documentElement.scrollHeight - window.innerHeight;
+  const pct = dh>0 ? Math.round((st/dh)*100) : 0;
+  const c = document.getElementById('progressCircle');
+  c.style.strokeDashoffset = 125.6 - (pct/100)*125.6;
+  document.getElementById('progressText').textContent = pct+'%';
+}
+function updateActiveToc() {
+  let cur = null;
+  document.querySelectorAll('#chapters .chapter').forEach(ch=>{ if(ch.getBoundingClientRect().top<=120) cur=ch.id; });
+  document.querySelectorAll('.toc-item[data-target]').forEach(item=>{item.classList.toggle('active', item.dataset.target===cur); });
+}
+function updateToTop(){ document.getElementById('toTop').classList.toggle('visible', window.scrollY>400); }
+window.addEventListener('scroll', ()=>{ updateProgress(); updateActiveToc(); updateToTop(); });
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+loadChapters().then(()=>{ updateProgress(); });
+</script>
+</body>
+</html>
