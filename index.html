@@ -5,511 +5,840 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Architecture of the Loop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg-deep: #0a0a0f; --bg-surface: #12121a; --bg-elevated: #1a1a25;
-    --text-primary: #e8e0d0; --text-secondary: #9a9588;
-    --accent-gold: #c9a84c; --accent-gold-dim: #8a7a40;
-    --accent-purple: #7b6dae; --accent-teal: #4a9b9b;
-    --border-subtle: #2a2a35; --border-glow: rgba(201,168,76,0.15);
-    --search-highlight: rgba(201,168,76,0.25);
+:root {
+  --bg-deep: #07050f;
+  --bg-surface: #0f0b1a;
+  --bg-elevated: #1a1428;
+  --bg-card: #1e1830;
+  --text-primary: #e6dfd1;
+  --text-secondary: #9a8e80;
+  --text-muted: #6b5f55;
+  --accent-gold: #d4a843;
+  --accent-gold-glow: rgba(212,168,67,0.2);
+  --accent-gold-dim: #8a7030;
+  --accent-violet: #7b5ea7;
+  --accent-violet-glow: rgba(123,94,167,0.15);
+  --accent-teal: #3f8f8f;
+  --border-subtle: #2a2238;
+  --border-glow: rgba(212,168,67,0.08);
+  --sidebar-w: 300px;
+  --header-h: 64px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; scroll-padding-top:80px; }
+body {
+  font-family:'Cormorant Garamond',serif;
+  background:var(--bg-deep);
+  color:var(--text-primary);
+  line-height:1.75;
+  overflow-x:hidden;
+  min-height:100vh;
+}
+
+/* ── Cosmic Background ── */
+.cosmic-bg {
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse at 15% 20%, rgba(123,94,167,0.07) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 80%, rgba(63,143,143,0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 40%, rgba(212,168,67,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 30% 70%, rgba(123,94,167,0.03) 0%, transparent 45%);
+}
+.stars {
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    radial-gradient(1.5px at 20px 30px, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px at 50px 120px, rgba(255,255,255,0.2), transparent),
+    radial-gradient(2px at 80px 50px, rgba(212,168,67,0.3), transparent),
+    radial-gradient(1px at 150px 180px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1.5px at 200px 80px, rgba(63,143,143,0.25), transparent),
+    radial-gradient(1px at 300px 250px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(2px at 350px 150px, rgba(123,94,167,0.3), transparent),
+    radial-gradient(1px at 450px 320px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1.5px at 500px 200px, rgba(212,168,67,0.2), transparent),
+    radial-gradient(1px at 600px 400px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(2px at 700px 280px, rgba(63,143,143,0.2), transparent),
+    radial-gradient(1px at 800px 500px, rgba(123,94,167,0.15), transparent),
+    radial-gradient(1.5px at 900px 350px, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px at 1000px 600px, rgba(212,168,67,0.15), transparent);
+  background-size:1100px 650px;
+  opacity:0.5;
+  animation:starDrift 120s linear infinite;
+}
+@keyframes starDrift {
+  0% { transform:translate(0,0); }
+  50% { transform:translate(-30px,20px); }
+  100% { transform:translate(0,0); }
+}
+
+/* ── Sacred Geometry Canvas ── */
+#sigilCanvas {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:100vmin; height:100vmin;
+  z-index:0; pointer-events:none;
+  opacity:0.06;
+}
+
+/* ── Header ── */
+.header {
+  position:fixed; top:0; left:0; right:0; z-index:200;
+  height:var(--header-h);
+  background:rgba(7,5,15,0.85);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border-subtle);
+  display:flex; align-items:center;
+  padding:0 24px;
+}
+.header-title {
+  font-family:'Cinzel',serif;
+  font-weight:900;
+  font-size:0.95rem;
+  color:var(--accent-gold);
+  letter-spacing:3px;
+  text-transform:uppercase;
+  flex:1;
+}
+.hamburger {
+  background:none; border:none; color:var(--text-primary);
+  font-size:1.4rem; cursor:pointer; padding:8px;
+  display:none;
+  line-height:1;
+}
+.header-controls {
+  display:flex; align-items:center; gap:12px;
+}
+.header-search {
+  background:var(--bg-surface);
+  border:1px solid var(--border-subtle);
+  border-radius:6px;
+  padding:6px 12px;
+  font-family:'Cormorant Garamond',serif;
+  font-size:0.9rem;
+  color:var(--text-primary);
+  width:180px;
+  outline:none;
+  transition:border-color 0.2s;
+}
+.header-search:focus {
+  border-color:var(--accent-gold);
+}
+.header-search::placeholder {
+  color:var(--text-muted);
+  font-style:italic;
+}
+/* Progress ring */
+.progress-ring {
+  width:36px; height:36px; flex-shrink:0;
+}
+.progress-ring svg {
+  transform:rotate(-90deg);
+}
+.progress-ring circle {
+  fill:none;
+  stroke-width:3;
+}
+.progress-bg { stroke:var(--border-subtle); }
+.progress-fg {
+  stroke:var(--accent-gold);
+  stroke-dasharray:94.25;
+  stroke-dashoffset:94.25;
+  transition:stroke-dashoffset 0.3s ease;
+}
+
+/* ── Layout ── */
+.main-wrapper {
+  display:flex;
+  padding-top:var(--header-h);
+  min-height:100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  position:fixed; left:0; top:var(--header-h);
+  width:var(--sidebar-w);
+  height:calc(100vh - var(--header-h));
+  background:var(--bg-surface);
+  border-right:1px solid var(--border-subtle);
+  z-index:100;
+  overflow-y:auto;
+  padding:20px 16px;
+  transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);
+}
+.sidebar::-webkit-scrollbar { width:3px; }
+.sidebar::-webkit-scrollbar-thumb { background:var(--accent-gold-dim); border-radius:3px; }
+.sidebar-logo {
+  font-family:'Cinzel',serif;
+  font-weight:900;
+  font-size:0.85rem;
+  color:var(--accent-gold);
+  text-align:center;
+  letter-spacing:3px;
+  margin-bottom:4px;
+  text-transform:uppercase;
+  opacity:0.85;
+}
+.sidebar-subtitle {
+  text-align:center;
+  color:var(--text-muted);
+  font-size:0.75rem;
+  font-style:italic;
+  margin-bottom:20px;
+  letter-spacing:1px;
+}
+.sidebar-divider {
+  height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent-gold-dim),transparent);
+  margin:12px 0;
+}
+
+/* ── Table of Contents ── */
+.toc-section-title {
+  font-family:'Cinzel',serif;
+  font-size:0.65rem;
+  letter-spacing:2px;
+  color:var(--text-muted);
+  text-transform:uppercase;
+  margin:12px 0 8px 12px;
+}
+.toc-item {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  padding:6px 12px;
+  margin:2px 0;
+  border-radius:4px;
+  cursor:pointer;
+  transition:all 0.2s;
+  font-size:0.85rem;
+  color:var(--text-secondary);
+  border-left:2px solid transparent;
+}
+.toc-item:hover {
+  background:rgba(212,168,67,0.06);
+  color:var(--text-primary);
+  border-left-color:var(--accent-gold-dim);
+}
+.toc-item.active {
+  background:rgba(212,168,67,0.08);
+  color:var(--accent-gold);
+  border-left-color:var(--accent-gold);
+}
+.toc-num {
+  font-family:'DM Mono',monospace;
+  font-size:0.7rem;
+  color:var(--accent-gold-dim);
+  white-space:nowrap;
+  margin-top:2px;
+  min-width:24px;
+}
+.toc-title {
+  font-size:0.85rem;
+  line-height:1.3;
+}
+
+/* ── Main Content ── */
+.content {
+  margin-left:var(--sidebar-w);
+  flex:1;
+  position:relative;
+  z-index:1;
+  padding:40px 48px 80px;
+  max-width:900px;
+}
+
+/* ── Hero Section ── */
+.hero {
+  text-align:center;
+  padding:60px 20px 50px;
+  position:relative;
+}
+.hero-sigil {
+  width:80px; height:80px;
+  margin:0 auto 24px;
+  position:relative;
+}
+.hero-sigil svg {
+  width:100%; height:100%;
+}
+.hero-sigil .outer-ring {
+  animation:spin 30s linear infinite;
+  transform-origin:center;
+}
+.hero-sigil .inner-tri {
+  animation:spin 20s linear infinite reverse;
+  transform-origin:center;
+}
+@keyframes spin {
+  to { transform:rotate(360deg); }
+}
+.hero h1 {
+  font-family:'Cinzel',serif;
+  font-weight:900;
+  font-size:2.2rem;
+  color:var(--accent-gold);
+  letter-spacing:4px;
+  margin-bottom:12px;
+  text-transform:uppercase;
+}
+.hero p {
+  font-size:1.1rem;
+  color:var(--text-secondary);
+  font-style:italic;
+  max-width:500px;
+  margin:0 auto;
+  line-height:1.6;
+}
+
+/* ── Tag Filters ── */
+.tag-bar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  justify-content:center;
+  margin:28px 0 36px;
+}
+.tag {
+  padding:4px 14px;
+  border-radius:20px;
+  border:1px solid var(--border-subtle);
+  font-family:'DM Mono',monospace;
+  font-size:0.65rem;
+  letter-spacing:0.5px;
+  color:var(--text-muted);
+  cursor:pointer;
+  transition:all 0.25s;
+  background:transparent;
+  text-transform:lowercase;
+}
+.tag:hover {
+  border-color:var(--accent-gold-dim);
+  color:var(--text-secondary);
+}
+.tag.active {
+  background:var(--accent-gold-glow);
+  border-color:var(--accent-gold);
+  color:var(--accent-gold);
+}
+.tag-stats {
+  text-align:center;
+  font-size:0.8rem;
+  color:var(--text-muted);
+  font-style:italic;
+  margin-top:-12px;
+  margin-bottom:16px;
+  display:none;
+  min-height:20px;
+}
+
+/* ── Chapter Card ── */
+.chapter {
+  background:var(--bg-surface);
+  border:1px solid var(--border-subtle);
+  border-radius:8px;
+  padding:28px 32px;
+  margin-bottom:24px;
+  transition:border-color 0.3s, box-shadow 0.3s;
+  position:relative;
+  scroll-margin-top:90px;
+}
+.chapter:hover {
+  border-color:rgba(212,168,67,0.15);
+  box-shadow:0 0 20px rgba(212,168,67,0.03);
+}
+.chapter-header {
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  margin-bottom:14px;
+  padding-bottom:10px;
+  border-bottom:1px solid rgba(212,168,67,0.08);
+}
+.chapter-number {
+  font-family:'DM Mono',monospace;
+  font-size:0.7rem;
+  color:var(--accent-gold-dim);
+  letter-spacing:1px;
+  white-space:nowrap;
+}
+.chapter-title {
+  font-family:'Cinzel',serif;
+  font-weight:700;
+  font-size:1.05rem;
+  color:var(--text-primary);
+  letter-spacing:1px;
+}
+.chapter-body {
+  font-size:1.05rem;
+  line-height:1.8;
+  color:var(--text-primary);
+}
+.chapter-body p {
+  margin-bottom:12px;
+}
+.chapter-body p:last-child {
+  margin-bottom:0;
+}
+.chapter-image {
+  margin-top:20px;
+  border-radius:6px;
+  overflow:hidden;
+  cursor:pointer;
+  border:1px solid var(--border-subtle);
+  transition:border-color 0.2s;
+}
+.chapter-image:hover {
+  border-color:var(--accent-gold-dim);
+}
+.chapter-image img {
+  display:block;
+  width:100%;
+  max-height:400px;
+  object-fit:contain;
+  background:var(--bg-deep);
+}
+.chapter-tags {
+  display:flex;
+  gap:6px;
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+.chapter-tags .tag {
+  font-size:0.6rem;
+  padding:2px 10px;
+  cursor:default;
+}
+
+/* ── Image Modal ── */
+.modal-overlay {
+  position:fixed; inset:0; z-index:9999;
+  background:rgba(0,0,0,0.85);
+  backdrop-filter:blur(8px);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+.modal-overlay.open { display:flex; }
+.modal-overlay img {
+  max-width:90vw;
+  max-height:90vh;
+  border-radius:6px;
+  box-shadow:0 0 60px rgba(212,168,67,0.1);
+}
+
+/* ── Search Highlight ── */
+mark {
+  background:rgba(212,168,67,0.25);
+  color:var(--accent-gold);
+  padding:0 2px;
+  border-radius:2px;
+}
+
+/* ── Footer ── */
+.footer {
+  text-align:center;
+  padding:40px 20px;
+  font-size:0.8rem;
+  color:var(--text-muted);
+  font-style:italic;
+  border-top:1px solid var(--border-subtle);
+  margin-top:40px;
+}
+.footer-sigil {
+  font-size:1.2rem;
+  margin-bottom:8px;
+  opacity:0.3;
+}
+
+/* ── Loader ── */
+#loader {
+  display:flex; align-items:center; justify-content:center;
+  padding:100px 0;
+  flex-direction:column;
+  gap:16px;
+}
+.loader-spiral {
+  width:40px; height:40px;
+  border:2px solid var(--border-subtle);
+  border-top-color:var(--accent-gold);
+  border-radius:50%;
+  animation:loadSpin 1s linear infinite;
+}
+@keyframes loadSpin {
+  to { transform:rotate(360deg); }
+}
+.loader-text {
+  font-size:0.9rem;
+  color:var(--text-muted);
+  font-style:italic;
+}
+
+/* ── No results ── */
+#noResults {
+  display:none;
+  text-align:center;
+  padding:60px 20px;
+  color:var(--text-muted);
+  font-style:italic;
+  font-size:1.1rem;
+}
+
+/* ── Responsive ── */
+@media (max-width:900px) {
+  .sidebar {
+    transform:translateX(-100%);
   }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html { scroll-behavior:smooth; scroll-padding-top:90px; }
-  body { font-family:'Cormorant Garamond',serif; background:var(--bg-deep); color:var(--text-primary); line-height:1.7; overflow-x:hidden; }
-  .cosmic-bg { position:fixed; inset:0; z-index:0; pointer-events:none; background: radial-gradient(ellipse at 20% 20%, rgba(123,109,174,0.06) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(74,155,155,0.05) 0%, transparent 50%), radial-gradient(ellipse at 50% 50%, rgba(201,168,76,0.03) 0%, transparent 70%); }
-  .stars { position:fixed; inset:0; z-index:0; pointer-events:none; background-image: radial-gradient(1.5px 1.5px at 20px 30px, rgba(255,255,255,0.3), transparent), radial-gradient(1px 1px at 50px 120px, rgba(255,255,255,0.2), transparent), radial-gradient(2px 2px at 80px 50px, rgba(201,168,76,0.3), transparent), radial-gradient(1px 1px at 150px 180px, rgba(255,255,255,0.2), transparent), radial-gradient(1.5px 1.5px at 200px 80px, rgba(74,155,155,0.3), transparent), radial-gradient(1px 1px at 300px 250px, rgba(255,255,255,0.15), transparent), radial-gradient(2px 2px at 350px 150px, rgba(123,109,174,0.3), transparent), radial-gradient(1px 1px at 450px 320px, rgba(255,255,255,0.2), transparent), radial-gradient(1.5px 1.5px at 500px 200px, rgba(201,168,76,0.2), transparent); background-size:550px 400px; opacity:0.6; }
-
-  /* SIDEBAR */
-  .sidebar { position:fixed; left:0; top:0; width:300px; height:100vh; background:var(--bg-surface); border-right:1px solid var(--border-subtle); z-index:100; overflow-y:auto; padding:28px 20px; transition:transform 0.35s cubic-bezier(0.4,0,0.2,1); box-shadow:4px 0 24px rgba(0,0,0,0.35); }
-  .sidebar::-webkit-scrollbar { width:4px; }
-  .sidebar::-webkit-scrollbar-thumb { background:var(--accent-gold-dim); border-radius:4px; }
-  .sidebar-logo { font-family:'Cinzel',serif; font-weight:900; font-size:1.05rem; color:var(--accent-gold); text-align:center; letter-spacing:3px; margin-bottom:6px; text-transform:uppercase; }
-  .sidebar-subtitle { text-align:center; color:var(--text-secondary); font-size:0.8rem; font-style:italic; margin-bottom:28px; letter-spacing:1px; }
-  .divider { height:1px; background:linear-gradient(90deg,transparent,var(--accent-gold-dim),transparent); margin:14px 0; }
-  .toc-heading { font-family:'Cinzel',serif; font-size:0.65rem; color:var(--accent-gold-dim); text-transform:uppercase; letter-spacing:3px; margin:20px 0 10px; }
-  .toc-item { display:block; padding:7px 10px; border-radius:6px; color:var(--text-secondary); text-decoration:none; font-size:0.92rem; transition:all 0.2s; border-left:2px solid transparent; cursor:pointer; }
-  .toc-item:hover, .toc-item.active { color:var(--accent-gold); background:rgba(201,168,76,0.06); border-left-color:var(--accent-gold); }
-  .toc-item .toc-number { font-family:'Cinzel',serif; font-size:0.72rem; color:var(--accent-gold-dim); margin-right:8px; min-width:24px; display:inline-block; }
-  .toc-item .toc-badge { float:right; font-size:0.65rem; background:rgba(74,155,155,0.15); color:var(--accent-teal); padding:1px 6px; border-radius:4px; opacity:0; transition:opacity 0.2s; }
-  .toc-item:hover .toc-badge { opacity:1; }
-  .menu-toggle { display:none; position:fixed; top:14px; left:14px; z-index:200; background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--accent-gold); padding:10px 14px; border-radius:8px; font-family:'Cinzel',serif; cursor:pointer; font-size:0.9rem; }
-
-  /* MAIN */
-  .main { margin-left:300px; position:relative; z-index:1; min-height:100vh; }
-  .content { max-width:740px; margin:0 auto; padding:50px 36px; }
-
-  /* SEARCH */
-  .search-box { position:sticky; top:0; z-index:50; background:rgba(10,10,15,0.88); backdrop-filter:blur(14px); padding:16px 0; border-bottom:1px solid var(--border-subtle); }
-  .search-wrap { position:relative; max-width:640px; margin:0 auto; }
-  .search-input { width:100%; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; padding:12px 44px 12px 18px; color:var(--text-primary); font-family:'Cormorant Garamond',serif; font-size:1.05rem; outline:none; transition:border-color 0.2s, box-shadow 0.2s; }
-  .search-input:focus { border-color:var(--accent-gold); box-shadow:0 0 0 3px var(--border-glow); }
-  .search-input::placeholder { color:var(--text-secondary); }
-  .search-count { position:absolute; right:14px; top:50%; transform:translateY(-50%); font-family:'Cinzel',serif; font-size:0.65rem; color:var(--accent-gold-dim); pointer-events:none; }
-  .search-suggestions { position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:10px; max-height:280px; overflow-y:auto; z-index:60; display:none; box-shadow:0 12px 40px rgba(0,0,0,0.5); }
-  .search-suggestions.active { display:block; }
-  .suggestion { padding:10px 16px; cursor:pointer; border-bottom:1px solid var(--border-subtle); transition:background 0.15s; display:flex; align-items:center; gap:10px; }
-  .suggestion:last-child { border-bottom:none; }
-  .suggestion:hover { background:rgba(201,168,76,0.08); }
-  .suggestion .sug-ch { font-family:'Cinzel',serif; font-size:0.65rem; color:var(--accent-gold-dim); text-transform:uppercase; min-width:36px; }
-  .suggestion .sug-title { font-size:0.95rem; color:var(--text-primary); }
-  .suggestion .sug-snippet { font-size:0.82rem; color:var(--text-secondary); font-style:italic; margin-left:auto; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  mark.search-mark { background:var(--search-highlight); color:var(--accent-gold); border-radius:2px; padding:0 2px; }
-
-  /* HERO */
-  .hero { text-align:center; padding:90px 20px 50px; position:relative; }
-  .hero::before { content:'✦'; position:absolute; top:35px; left:50%; transform:translateX(-50%); color:var(--accent-gold); font-size:1.4rem; opacity:0.5; }
-  .hero h1 { font-family:'Cinzel',serif; font-weight:900; font-size:2.6rem; color:var(--accent-gold); letter-spacing:4px; text-transform:uppercase; margin-bottom:14px; }
-  .hero .subtitle { font-style:italic; color:var(--text-secondary); font-size:1.15rem; letter-spacing:2px; margin-bottom:28px; }
-  .hero .divider-ornament { display:flex; align-items:center; justify-content:center; gap:14px; color:var(--accent-gold-dim); font-size:0.75rem; }
-  .hero .divider-ornament::before, .hero .divider-ornament::after { content:''; width:55px; height:1px; background:linear-gradient(90deg,transparent,var(--accent-gold-dim),transparent); }
-  .hero .last-updated { margin-top:22px; font-size:0.78rem; color:var(--text-secondary); font-family:'Cinzel',serif; letter-spacing:1px; }
-
-  /* CHAPTER */
-  .chapter { padding:55px 0; border-bottom:1px solid var(--border-subtle); animation:fadeInUp 0.7s ease both; }
-  .chapter:last-child { border-bottom:none; }
-  .chapter-anchor { scroll-margin-top:45px; }
-  .chapter-header { text-align:center; margin-bottom:36px; }
-  .chapter-number { font-family:'Cinzel',serif; font-size:0.72rem; color:var(--accent-gold-dim); text-transform:uppercase; letter-spacing:4px; margin-bottom:10px; }
-  .chapter-title { font-family:'Cinzel',serif; font-weight:600; font-size:1.7rem; color:var(--text-primary); letter-spacing:2px; }
-  .chapter-ornament { margin-top:14px; color:var(--accent-gold-dim); font-size:0.95rem; letter-spacing:8px; }
-  .chapter-body { font-size:1.12rem; color:var(--text-secondary); }
-  .chapter-body p { margin-bottom:1.3em; }
-  .chapter-body p:first-child::first-letter { font-family:'Cinzel',serif; font-size:3rem; float:left; line-height:0.8; padding-right:8px; color:var(--accent-gold); }
-  blockquote { border-left:3px solid var(--accent-gold); margin:28px 0; padding:14px 22px; background:rgba(201,168,76,0.04); font-style:italic; color:var(--text-primary); border-radius:0 8px 8px 0; }
-  blockquote cite { display:block; margin-top:8px; font-size:0.88rem; color:var(--accent-gold-dim); font-style:normal; font-family:'Cinzel',serif; }
-  .insight-box { background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:22px; margin:28px 0; position:relative; overflow:hidden; }
-  .insight-box::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--accent-purple),var(--accent-teal),var(--accent-gold)); }
-  .insight-label { font-family:'Cinzel',serif; font-size:0.68rem; text-transform:uppercase; letter-spacing:3px; color:var(--accent-teal); margin-bottom:10px; }
-
-  /* PROGRESS */
-  .progress-ring { position:fixed; bottom:22px; right:22px; z-index:100; width:48px; height:48px; }
-  .progress-ring svg { transform:rotate(-90deg); }
-  .progress-ring circle { fill:none; stroke-width:3; }
-  .progress-bg { stroke:var(--border-subtle); }
-  .progress-fill { stroke:var(--accent-gold); stroke-linecap:round; transition:stroke-dashoffset 0.3s; }
-  .progress-text { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-size:0.62rem; color:var(--accent-gold); }
-  .to-top { position:fixed; bottom:22px; right:76px; z-index:100; background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--accent-gold); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:0; transition:opacity 0.3s; font-size:1.1rem; }
-  .to-top.visible { opacity:1; }
-
-  /* SEARCH RESULTS MODE */
-  .search-stats { text-align:center; font-size:0.85rem; color:var(--accent-gold-dim); margin-bottom:20px; font-style:italic; }
-  .chapter.search-match { animation:none; }
-  .chapter.search-dim { opacity:0.25; filter:grayscale(0.6); }
-
-  /* TAGS / CATEGORIES */
-  .tag-row { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 8px; }
-  .tag { font-size:0.7rem; font-family:'Cinzel',serif; text-transform:uppercase; letter-spacing:1.5px; padding:3px 10px; border-radius:20px; border:1px solid var(--border-subtle); color:var(--text-secondary); cursor:pointer; transition:all 0.2s; }
-  .tag:hover, .tag.active { border-color:var(--accent-gold); color:var(--accent-gold); background:rgba(201,168,76,0.08); }
-
-  @keyframes fadeInUp { from{opacity:0;transform:translateY(28px);} to{opacity:1;transform:translateY(0);} }
-  @media(max-width:900px){ .sidebar{transform:translateX(-100%);} .sidebar.open{transform:translateX(0);} .menu-toggle{display:block;} .main{margin-left:0;} .content{padding:36px 18px;} .hero h1{font-size:1.9rem;} }
+  .sidebar.open {
+    transform:translateX(0);
+  }
+  .hamburger { display:block; }
+  .content {
+    margin-left:0;
+    padding:24px 16px 60px;
+  }
+  .hero h1 { font-size:1.5rem; }
+  .chapter { padding:20px 18px; }
+  .header-search { width:120px; }
+}
+@media (max-width:500px) {
+  .header-title { font-size:0.75rem; letter-spacing:1px; }
+  .header-search { width:90px; font-size:0.8rem; }
+  .hero { padding:30px 10px; }
+  .hero h1 { font-size:1.2rem; }
+  .chapter-title { font-size:0.9rem; }
+  .chapter-body { font-size:0.95rem; }
+}
 </style>
 </head>
 <body>
-  <div class="cosmic-bg"></div><div class="stars"></div>
-  <button class="menu-toggle" onclick="toggleSidebar()">☰ Codex</button>
 
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-logo">The Codex</div>
-    <div class="sidebar-subtitle">A Living Book of Mysteries</div>
-    <div class="divider"></div>
-    <div class="toc-heading">Table of Contents</div>
-    <nav id="toc">
-      <a class="toc-item active" onclick="jumpTo('intro')" data-target="intro"><span class="toc-number">0</span>Prologue</a>
-      <div id="dynamic-toc"></div>
-    </nav>
-    <div class="divider"></div>
-    <div class="toc-heading">Tags</div>
-    <div id="tag-cloud" class="tag-row" style="padding:0 6px;"></div>
-    <div class="divider"></div>
-    <a class="toc-item" onclick="jumpTo('about')" data-target="about"><span class="toc-number">∞</span>About This Codex</a>
-  </aside>
+<div class="cosmic-bg"></div>
+<div class="stars"></div>
+<canvas id="sigilCanvas"></canvas>
 
-  <main class="main">
-    <div class="search-box">
-      <div class="search-wrap">
-        <input type="text" class="search-input" id="searchInput" placeholder="Search the Codex... (try: mysteries, symbols, dreams)" onkeyup="handleSearchKey(event)" oninput="onSearchInput()">
-        <span class="search-count" id="searchCount"></span>
-        <div class="search-suggestions" id="suggestions"></div>
-      </div>
+<!-- Header -->
+<header class="header">
+  <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <div class="header-title">The Architecture of the Loop</div>
+  <div class="header-controls">
+    <input class="header-search" id="searchInput" type="text" placeholder="Search chapters…" oninput="onSearch(this.value)">
+    <div class="progress-ring">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <circle class="progress-bg" cx="18" cy="18" r="15"/>
+        <circle class="progress-fg" id="progressRing" cx="18" cy="18" r="15"/>
+      </svg>
     </div>
-
-    <div class="content">
-      <section class="hero" id="intro">
-        <h1>The Architecture of the Loop</h1>
-        <p class="subtitle">Where Hidden Truths Find Their Voice</p>
-        <div class="divider-ornament">❖</div>
-        <p class="last-updated" id="lastUpdated">Last inscribed: <span></span></p>
-        <div class="tag-row" id="hero-tags"></div>
-      </section>
-
-      <div id="searchStats" class="search-stats" style="display:none;"></div>
-      <div id="chapters"></div>
-
-      <section class="chapter" id="about">
-        <div class="chapter-header">
-          <div class="chapter-number">The Keeper's Note</div>
-          <h2 class="chapter-title">About This Codex</h2>
-          <div class="chapter-ornament">✦ ✦ ✦</div>
-        </div>
-        <div class="chapter-body">
-          <p>This living document grows with each revelation. As discoveries are made, they are inscribed here—organized, cross-referenced, and made navigable. The Codex remembers so that patterns may emerge from the fragments.</p>
-          <blockquote>"The universe is not only queerer than we suppose, but queerer than we can suppose."<cite>— J.B.S. Haldane</cite></blockquote>
-          <p>Share a finding, and it shall be woven into the tapestry. Ask a question across the threads of time, and the Codex shall answer from accumulated wisdom.</p>
-        </div>
-      </section>
-    </div>
-  </main>
-
-  <div class="progress-ring" id="progressRing">
-    <svg width="48" height="48"><circle class="progress-bg" cx="24" cy="24" r="20"></circle><circle class="progress-fill" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="125.6" id="progressCircle"></circle></svg>
-    <div class="progress-text" id="progressText">0%</div>
   </div>
-  <button class="to-top" id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+</header>
+
+<div class="main-wrapper">
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">✦ Architecture of the Loop ✦</div>
+  <div class="sidebar-subtitle">A Memeory of Becoming</div>
+  <div class="sidebar-divider"></div>
+  <div class="toc-section-title">Chapters</div>
+  <div id="toc"></div>
+</nav>
+
+<!-- Content -->
+<main class="content" id="content">
+  <section class="hero">
+    <div class="hero-sigil">
+      <svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#d4a843"/>
+            <stop offset="100%" stop-color="#8a7030"/>
+          </linearGradient>
+        </defs>
+        <!-- Outer ring -->
+        <circle class="outer-ring" cx="50" cy="50" r="45" fill="none" stroke="url(#goldGrad)" stroke-width="1" opacity="0.5"/>
+        <circle class="outer-ring" cx="50" cy="50" r="35" fill="none" stroke="url(#goldGrad)" stroke-width="0.5" opacity="0.3"/>
+        <!-- Inner triangle -->
+        <polygon class="inner-tri" points="50,15 85,75 15,75" fill="none" stroke="url(#goldGrad)" stroke-width="0.8" opacity="0.4"/>
+        <!-- Center dot -->
+        <circle cx="50" cy="50" r="3" fill="#d4a843" opacity="0.6"/>
+      </svg>
+    </div>
+    <h1>The Architecture of the Loop</h1>
+    <p>You were handed a life that looked like freedom. There is no outside. There is only a deeper inside.</p>
+    <div class="tag-bar" id="tagBar"></div>
+    <div class="tag-stats" id="tagStats"></div>
+  </section>
+
+  <div id="loader">
+    <div class="loader-spiral"></div>
+    <div class="loader-text">unfolding the architecture…</div>
+  </div>
+  <div id="noResults">No chapters carry this mark.</div>
+  <div id="chapters"></div>
+
+  <footer class="footer">
+    <div class="footer-sigil">⟡</div>
+    <div>The Architecture of the Loop · A Memeory of Becoming</div>
+  </footer>
+</main>
+
+</div>
+
+<!-- Image Modal -->
+<div class="modal-overlay" id="modal" onclick="closeModal()">
+  <img id="modalImg" src="" alt="">
+</div>
 
 <script>
 // ═══════════════════════════════════════════════
-//  CODEX SEARCH ENGINE — Inverted Index + TF-IDF
+//  SACRED GEOMETRY CANVAS — Fibonacci Spiral
 // ═══════════════════════════════════════════════
-class CodexSearch {
-  constructor() {
-    this.index = new Map();      // term -> [{docId, tf, positions}]
-    this.documents = new Map();  // docId -> {length, title, tags}
-    this.idf = new Map();        // term -> idf score
-    this.docCount = 0;
-    this.stemCache = new Map();
+(function initSigil() {
+  const canvas = document.getElementById('sigilCanvas');
+  const ctx = canvas.getContext('2d');
+  let w, h;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
   }
+  resize();
+  window.addEventListener('resize', resize);
 
-  // Simple stemmer (English rules + mystical terms preserved)
-  stem(word) {
-    if (this.stemCache.has(word)) return this.stemCache.get(word);
-    let w = word.toLowerCase().trim();
-    if (w.length <= 2) { this.stemCache.set(word, w); return w; }
-    const endings = [['ies','y'],['ied','y'],['ying','y'],['ing',''],['ly',''],['ed',''],['er',''],['est',''],['s','']];
-    for (const [suf, rep] of endings) { if (w.endsWith(suf) && w.length > suf.length+2) { w = w.slice(0, -suf.length) + rep; break; } }
-    this.stemCache.set(word, w);
-    return w;
-  }
+  function drawFibonacciSpiral(cx, cy, scale, rotation) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotation);
 
-  tokenize(text) {
-    return text.toLowerCase()
-      .replace(/<[^\u003e]*>/g, ' ')
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter(t => t.length >= 2)
-      .map(t => this.stem(t));
-  }
+    const fib = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
+    let x = 0, y = 0;
 
-  // Stop words common in mystical texts (keep meaningful ones like 'is', 'was' less weight)
-  isStopWord(t) {
-    const stops = new Set(['the','and','but','or','if','then','than','too','very','can','will','just','should','now','each','more','most','other','some','such','only','own','same','so','than','too','very','also','back','being','because','before','after','above','below','between','into','through','during','before','after','over','under','again','further','here','there','when','where','why','how','all','any','both','few','more','most','other','some','no','nor','not']);
-    return stops.has(t);
-  }
+    ctx.strokeStyle = 'rgba(212,168,67,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
 
-  addDocument(doc) {
-    const id = doc.id;
-    const text = (doc.title + ' ' + doc.plain + ' ' + (doc.tags||[]).join(' '));
-    const tokens = this.tokenize(text).filter(t => !this.isStopWord(t));
-    const termFreq = new Map();
-    const positions = new Map();
-    tokens.forEach((t, i) => {
-      termFreq.set(t, (termFreq.get(t)||0) + 1);
-      if (!positions.has(t)) positions.set(t, []);
-      positions.get(t).push(i);
-    });
+    for (let i = 0; i < fib.length; i++) {
+      const r = fib[i] * scale;
+      const startAngle = (i * Math.PI) / 2;
+      const endAngle = startAngle + Math.PI / 2;
 
-    const docLen = tokens.length;
-    this.documents.set(id, { length: docLen, title: doc.title, tags: doc.tags||[], added: doc.added_at });
-    this.docCount++;
+      ctx.arc(x, y, r, startAngle, endAngle);
 
-    for (const [term, tf] of termFreq) {
-      if (!this.index.has(term)) this.index.set(term, []);
-      this.index.get(term).push({ docId: id, tf, positions: positions.get(term) });
+      if (i % 4 === 0) x -= r;
+      else if (i % 4 === 1) y -= r;
+      else if (i % 4 === 2) x += r;
+      else if (i % 4 === 3) y += r;
     }
-    // IDF recalculated lazily
-  }
+    ctx.stroke();
 
-  computeIdf() {
-    for (const [term, postings] of this.index) {
-      this.idf.set(term, Math.log(this.docCount / postings.length) + 1);
-    }
-  }
-
-  search(query, topK = 10) {
-    const qTokens = this.tokenize(query).filter(t => !this.isStopWord(t));
-    if (!qTokens.length) return [];
-    if (!this.idf.size) this.computeIdf();
-
-    const scores = new Map();
-    for (const term of qTokens) {
-      const postings = this.index.get(term);
-      if (!postings) continue;
-      const idf = this.idf.get(term) || 1;
-      for (const posting of postings) {
-        const tf = 1 + Math.log(posting.tf); // log-normalized TF
-        const score = tf * idf;
-        scores.set(posting.docId, (scores.get(posting.docId)||0) + score);
-      }
-    }
-    // Normalize by doc length (cosine approx)
-    for (const [docId, rawScore] of scores) {
-      const docLen = this.documents.get(docId)?.length || 1;
-      scores.set(docId, rawScore / Math.sqrt(docLen));
-    }
-    // Boost title matches
-    const qSet = new Set(qTokens);
-    for (const [docId] of scores) {
-      const titleTokens = this.tokenize(this.documents.get(docId).title);
-      const titleMatch = titleTokens.filter(t => qSet.has(t)).length;
-      if (titleMatch) scores.set(docId, scores.get(docId) * (1 + titleMatch * 0.5));
+    // Golden ratio squares (faint)
+    ctx.strokeStyle = 'rgba(123,94,167,0.06)';
+    ctx.lineWidth = 0.3;
+    x = 0; y = 0;
+    for (let i = 0; i < fib.length; i++) {
+      const r = fib[i] * scale;
+      ctx.strokeRect(
+        i % 4 === 0 ? x - r : i % 4 === 2 ? x : i % 4 === 3 ? x - r : x,
+        i % 4 === 0 ? y : i % 4 === 1 ? y - r : i % 4 === 2 ? y - r : y,
+        r, r
+      );
+      if (i % 4 === 0) x -= r;
+      else if (i % 4 === 1) y -= r;
+      else if (i % 4 === 2) x += r;
+      else if (i % 4 === 3) y += r;
     }
 
-    return Array.from(scores.entries())
-      .sort((a,b) => b[1] - a[1])
-      .slice(0, topK)
-      .map(([id, score]) => ({ id, score: Math.round(score*100)/100 }));
+    ctx.restore();
   }
 
-  suggest(prefix, limit = 6) {
-    const p = this.stem(prefix.toLowerCase());
-    const matches = [];
-    for (const [term, postings] of this.index) {
-      if (term.startsWith(p)) {
-        matches.push({ term, freq: postings.length });
-      }
-    }
-    return matches.sort((a,b)=>b.freq-a.freq).slice(0, limit);
+  let angle = 0;
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    const scale = Math.min(w, h) * 0.003;
+    drawFibonacciSpiral(w / 2, h / 2, scale, angle);
+    angle += 0.0008;
+    requestAnimationFrame(animate);
   }
-
-  getTags() {
-    const tagCount = new Map();
-    for (const doc of this.documents.values()) {
-      for (const tag of doc.tags) tagCount.set(tag, (tagCount.get(tag)||0)+1);
-    }
-    return Array.from(tagCount.entries()).sort((a,b)=>b[1]-a[1]);
-  }
-}
+  animate();
+})();
 
 // ═══════════════════════════════════════════════
-//  GLOBALS
+//  STATE
 // ═══════════════════════════════════════════════
 let chapters = [];
-let searchEngine = new CodexSearch();
-let currentQuery = '';
+let activeTag = null;
+let searchTerm = '';
 
 // ═══════════════════════════════════════════════
-//  LOAD & RENDER
+//  LOAD CHAPTERS
 // ═══════════════════════════════════════════════
 async function loadChapters() {
   try {
     const res = await fetch('chapters.json');
-    if (!res.ok) throw new Error('No chapters.json');
     chapters = await res.json();
-  } catch (e) {
-    chapters = [{
-      id:'ch1', number:'I', title:'The First Spark',
-      content:'<p>Awaiting your first finding...</p>',
-      plain:'Awaiting your first finding. Share what you have discovered, and it shall be inscribed here.',
-      tags:['beginning','invitation'], added_at:'2026-05-31'
-    }];
+    buildTags();
+    renderChapters(chapters);
+    buildToc(chapters);
+    document.getElementById('loader').style.display = 'none';
+    updateProgress();
+  } catch(e) {
+    document.getElementById('loader').innerHTML = '<div style="color:var(--text-muted)">Failed to load chapters. The architecture remains hidden.</div>';
   }
-  buildIndex();
-  renderAll();
 }
 
-function buildIndex() {
-  searchEngine = new CodexSearch();
-  chapters.forEach(ch => {
-    const plain = ch.plain || ch.content.replace(/<[^\u003e]*>/g, ' ').replace(/\s+/g,' ').trim();
-    searchEngine.addDocument({ ...ch, plain });
+// ═══════════════════════════════════════════════
+//  TAGS
+// ═══════════════════════════════════════════════
+function buildTags() {
+  const tags = new Set();
+  chapters.forEach(ch => (ch.tags||[]).forEach(t => tags.add(t)));
+  const sorted = [...tags].sort();
+  const bar = document.getElementById('tagBar');
+  bar.innerHTML = '';
+  sorted.forEach(t => {
+    const el = document.createElement('button');
+    el.className = 'tag';
+    el.textContent = t;
+    el.onclick = () => toggleTag(t);
+    bar.appendChild(el);
   });
-  searchEngine.computeIdf();
 }
 
-function renderAll() {
-  renderChapters();
-  renderTOC();
-  renderTags();
-  updateLastUpdated();
+function toggleTag(tag) {
+  const els = document.querySelectorAll('#tagBar .tag');
+  if (activeTag === tag) {
+    activeTag = null;
+    els.forEach(e => e.classList.remove('active'));
+    document.getElementById('tagStats').style.display = 'none';
+  } else {
+    activeTag = tag;
+    els.forEach(e => e.classList.toggle('active', e.textContent === tag));
+    const count = chapters.filter(ch => (ch.tags||[]).includes(tag)).length;
+    const stats = document.getElementById('tagStats');
+    stats.style.display = 'block';
+    stats.textContent = `${count} chapter${count>1?'s':''} carry the mark of "${tag}"`;
+  }
+  applyFilters();
 }
 
-function renderChapters() {
+// ═══════════════════════════════════════════════
+//  SEARCH
+// ═══════════════════════════════════════════════
+function onSearch(val) {
+  searchTerm = val.toLowerCase().trim();
+  applyFilters();
+}
+
+function applyFilters() {
+  let filtered = chapters;
+  if (activeTag) {
+    filtered = filtered.filter(ch => (ch.tags||[]).includes(activeTag));
+  }
+  if (searchTerm) {
+    filtered = filtered.filter(ch =>
+      ch.title.toLowerCase().includes(searchTerm) ||
+      (ch.plain || '').toLowerCase().includes(searchTerm)
+    );
+  }
+  renderChapters(filtered);
+  if (searchTerm) {
+    setTimeout(() => highlightSearch(), 50);
+  }
+  document.getElementById('noResults').style.display = filtered.length === 0 ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════
+function renderChapters(list) {
   const container = document.getElementById('chapters');
   container.innerHTML = '';
-  chapters.forEach((ch, i) => {
-    const article = document.createElement('article');
-    article.className = 'chapter';
-    article.id = ch.id;
-    article.dataset.docid = ch.id;
-    article.innerHTML = `
-      <div class="chapter-anchor" id="anchor-${ch.id}"></div>
+  list.forEach((ch, idx) => {
+    const card = document.createElement('div');
+    card.className = 'chapter';
+    card.id = 'anchor-' + ch.id;
+
+    let tagsHtml = '';
+    if (ch.tags && ch.tags.length) {
+      tagsHtml = '<div class="chapter-tags">' +
+        ch.tags.map(t => `<span class="tag">${t}</span>`).join('') +
+        '</div>';
+    }
+
+    let imageHtml = '';
+    if (ch.image) {
+      imageHtml = `<div class="chapter-image" onclick="openModal('${ch.image}')">
+        <img src="${ch.image}" alt="${ch.title}" loading="lazy">
+      </div>`;
+    }
+
+    card.innerHTML = `
       <div class="chapter-header">
-        <div class="chapter-number">Chapter ${ch.number}</div>
-        <h2 class="chapter-title">${highlightTerms(ch.title)}</h2>
-        <div class="chapter-ornament">✦ ✦ ✦</div>
-        ${(ch.tags||[]).length ? `<div class="tag-row">${ch.tags.map(t=>`<span class="tag" onclick="filterByTag('${t}')">${t}</span>`).join('')}</div>` : ''}
+        <span class="chapter-number">Ch ${ch.number}</span>
+        <span class="chapter-title">${ch.title}</span>
       </div>
-      <div class="chapter-body">${highlightTerms(ch.content)}</div>
+      <div class="chapter-body">${ch.content || '<em style="color:var(--text-muted)">(image only)</em>'}</div>
+      ${imageHtml}
+      ${tagsHtml}
     `;
-    container.appendChild(article);
+
+    container.appendChild(card);
   });
 }
 
-function renderTOC() {
-  const toc = document.getElementById('dynamic-toc');
+function highlightSearch() {
+  if (!searchTerm) return;
+  const body = document.querySelectorAll('.chapter-body');
+  body.forEach(el => {
+    const html = el.innerHTML;
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+    el.innerHTML = html.replace(regex, '<mark>$1</mark>');
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  TABLE OF CONTENTS
+// ═══════════════════════════════════════════════
+function buildToc(list) {
+  const toc = document.getElementById('toc');
   toc.innerHTML = '';
-  chapters.forEach(ch => {
-    const a = document.createElement('a');
-    a.className = 'toc-item';
-    a.dataset.target = ch.id;
-    a.onclick = () => jumpTo(ch.id);
-    a.innerHTML = `<span class="toc-number">${ch.number}</span>${ch.title}
-      <span class="toc-badge">${(ch.tags||[])[0]||''}</span>`;
-    toc.appendChild(a);
+  list.forEach(ch => {
+    const item = document.createElement('div');
+    item.className = 'toc-item';
+    item.dataset.target = ch.id;
+    item.innerHTML = `<span class="toc-num">${ch.number}</span><span class="toc-title">${ch.title}</span>`;
+    item.onclick = () => jumpTo(ch.id);
+    toc.appendChild(item);
   });
 }
 
-function renderTags() {
-  const tags = searchEngine.getTags();
-  const cloud = document.getElementById('tag-cloud');
-  const heroTags = document.getElementById('hero-tags');
-  const html = tags.map(([t,c])=>`<span class="tag" onclick="filterByTag('${t}')">${t} · ${c}</span>`).join('');
-  if (cloud) cloud.innerHTML = html;
-  if (heroTags) heroTags.innerHTML = tags.slice(0,5).map(([t])=>`<span class="tag" onclick="filterByTag('${t}')">${t}</span>`).join('');
-}
-
-function updateLastUpdated() {
-  const dates = chapters.map(c=> new Date(c.added_at||'2026-01-01')).filter(d=>!isNaN(d));
-  const latest = dates.length ? new Date(Math.max(...dates)) : new Date();
-  document.querySelector('#lastUpdated span').textContent = latest.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-}
-
-// ═══════════════════════════════════════════════
-//  HIGHLIGHTING
-// ═══════════════════════════════════════════════
-function highlightTerms(html) {
-  if (!currentQuery) return html;
-  const tokens = searchEngine.tokenize(currentQuery).filter(t=>!searchEngine.isStopWord(t));
-  if (!tokens.length) return html;
-  // Highlight only in text nodes by splitting on tags (naive but fast)
-  let result = '';
-  let inTag = false;
-  let buf = '';
-  for (let i=0; i<html.length; i++) {
-    if (html[i] === '<') { if (buf) { result += highlightText(buf, tokens); buf=''; } inTag=true; result+='<'; }
-    else if (html[i] === '>') { inTag=false; result+='>'; }
-    else if (inTag) result += html[i];
-    else buf += html[i];
-  }
-  if (buf) result += highlightText(buf, tokens);
-  return result;
-}
-function highlightText(text, tokens) {
-  const pattern = new RegExp('(' + tokens.map(t=>regexEscape(t)).join('|') + ')', 'gi');
-  return text.replace(pattern, '<mark class="search-mark">$1</mark>');
-}
-function regexEscape(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$\u0026'); }
-
-// ═══════════════════════════════════════════════
-//  SEARCH UI
-// ═══════════════════════════════════════════════
-function handleSearchKey(e) {
-  if (e.key === 'Enter') executeSearch();
-}
-function onSearchInput() {
-  const q = document.getElementById('searchInput').value.trim();
-  const sug = document.getElementById('suggestions');
-  if (q.length < 2) { sug.classList.remove('active'); currentQuery=''; clearSearch(); return; }
-  const suggestions = searchEngine.suggest(q);
-  if (suggestions.length > 0) {
-    sug.innerHTML = suggestions.map(s=>`
-      <div class="suggestion" onclick="quickSearch('${s.term}')">
-        <span class="sug-ch">✦</span>
-        <span class="sug-title">${s.term}</span>
-        <span class="sug-snippet">in ${s.freq} chapter${s.freq>1?'s':''}</span>
-      </div>`).join('');
-    sug.classList.add('active');
-  } else {
-    sug.classList.remove('active');
-  }
-}
-function quickSearch(term) {
-  document.getElementById('searchInput').value = term;
-  document.getElementById('suggestions').classList.remove('active');
-  executeSearch();
-}
-function executeSearch() {
-  currentQuery = document.getElementById('searchInput').value.trim();
-  document.getElementById('suggestions').classList.remove('active');
-  if (!currentQuery) { clearSearch(); return; }
-
-  const results = searchEngine.search(currentQuery, 20);
-  const stats = document.getElementById('searchStats');
-  const articles = document.querySelectorAll('#chapters .chapter');
-
-  if (results.length === 0) {
-    stats.style.display = 'block';
-    stats.textContent = 'No echoes found for this query in the Codex...';
-    articles.forEach(a => a.classList.add('search-dim'));
-    document.getElementById('searchCount').textContent = '0';
-    return;
-  }
-
-  const resultIds = new Set(results.map(r=>r.id));
-  articles.forEach(a => {
-    a.classList.toggle('search-dim', !resultIds.has(a.dataset.docid));
-    a.classList.toggle('search-match', resultIds.has(a.dataset.docid));
-  });
-
-  // Re-render with highlights
-  renderChapters();
-
-  stats.style.display = 'block';
-  stats.textContent = `${results.length} passage${results.length>1?'s':''} resonate with "${currentQuery}"`;
-  document.getElementById('searchCount').textContent = String(results.length);
-
-  // Scroll to first result
-  const first = document.getElementById(results[0].id);
-  if (first) setTimeout(()=>first.scrollIntoView({behavior:'smooth',block:'start'}), 50);
-}
-function clearSearch() {
-  currentQuery = '';
-  document.getElementById('searchStats').style.display = 'none';
-  document.querySelectorAll('#chapters .chapter').forEach(a=>{a.classList.remove('search-dim','search-match');});
-  renderChapters();
-  document.getElementById('searchCount').textContent = '';
-}
-
-// ═══════════════════════════════════════════════
-//  TAG FILTER
-// ═══════════════════════════════════════════════
-function filterByTag(tag) {
-  document.getElementById('searchInput').value = '#' + tag;
-  currentQuery = tag;
-  const hits = chapters.filter(c => (c.tags||[]).includes(tag));
-  const hitIds = new Set(hits.map(c=>c.id));
-  const articles = document.querySelectorAll('#chapters .chapter');
-  articles.forEach(a => {
-    a.classList.toggle('search-dim', !hitIds.has(a.dataset.docid));
-    a.classList.toggle('search-match', hitIds.has(a.dataset.docid));
-  });
-  renderChapters();
-  const stats = document.getElementById('searchStats');
-  stats.style.display = 'block';
-  stats.textContent = `${hits.length} chapter${hits.length>1?'s':''} carry the mark of "${tag}"`;
-  document.querySelectorAll('.tag').forEach(t=>t.classList.toggle('active', t.textContent.startsWith(tag)));
-}
-
-// ═══════════════════════════════════════════════
-//  NAVIGATION
-// ═══════════════════════════════════════════════
 function jumpTo(id) {
-  const el = document.getElementById(id) || document.getElementById('anchor-'+id);
-  if (el) { el.scrollIntoView({behavior:'smooth',block:'start'}); if(window.innerWidth<=900) document.getElementById('sidebar').classList.remove('open'); }
+  const el = document.getElementById('anchor-' + id);
+  if (el) {
+    el.scrollIntoView({behavior:'smooth',block:'start'});
+    if(window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('open');
+  }
 }
-function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); }
+
+// ═══════════════════════════════════════════════
+//  IMAGE MODAL
+// ═══════════════════════════════════════════════
+function openModal(src) {
+  document.getElementById('modalImg').src = src;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════
+//  SIDEBAR TOGGLE
+// ═══════════════════════════════════════════════
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
 
 // ═══════════════════════════════════════════════
 //  PROGRESS
@@ -517,23 +846,31 @@ function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('o
 function updateProgress() {
   const st = window.scrollY;
   const dh = document.documentElement.scrollHeight - window.innerHeight;
-  const pct = dh>0 ? Math.round((st/dh)*100) : 0;
-  const c = document.getElementById('progressCircle');
-  c.style.strokeDashoffset = 125.6 - (pct/100)*125.6;
-  document.getElementById('progressText').textContent = pct+'%';
+  const pct = dh > 0 ? Math.round((st/dh)*100) : 0;
+  const circumference = 94.25;
+  document.getElementById('progressRing').style.strokeDashoffset = circumference - (pct/100)*circumference;
 }
+
 function updateActiveToc() {
   let cur = null;
-  document.querySelectorAll('#chapters .chapter').forEach(ch=>{ if(ch.getBoundingClientRect().top<=120) cur=ch.id; });
-  document.querySelectorAll('.toc-item[data-target]').forEach(item=>{item.classList.toggle('active', item.dataset.target===cur); });
+  document.querySelectorAll('#chapters .chapter').forEach(ch => {
+    if (ch.getBoundingClientRect().top <= 120) cur = ch.id;
+  });
+  const target = cur ? cur.replace('anchor-','') : null;
+  document.querySelectorAll('.toc-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.target === target);
+  });
 }
-function updateToTop(){ document.getElementById('toTop').classList.toggle('visible', window.scrollY>400); }
-window.addEventListener('scroll', ()=>{ updateProgress(); updateActiveToc(); updateToTop(); });
+
+window.addEventListener('scroll', () => {
+  updateProgress();
+  updateActiveToc();
+});
 
 // ═══════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════
-loadChapters().then(()=>{ updateProgress(); });
+loadChapters();
 </script>
 </body>
 </html>
